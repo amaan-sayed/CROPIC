@@ -51,7 +51,6 @@ const Upload: React.FC = () => {
       formData.append("lon", location.lon.toString());
     }
     formData.append("growth_stage", growthStage);
-    
 
     try {
       const response = await fetch('http://localhost:8000/api/analyze', {
@@ -77,13 +76,13 @@ const Upload: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] p-6 md:p-10">
+    <div className="min-h-screen bg-[#FAF9F6] p-6 md:p-10 font-sans">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
-             Upload Crop Image
+            Upload Crop Image
           </h1>
           <p className="text-slate-500 mt-1">Submit a crop photo with GPS location and growth stage for AI assessment.</p>
         </div>
@@ -91,9 +90,8 @@ const Upload: React.FC = () => {
         <div className="space-y-4">
 
           {/* Section 1: Image Upload */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              
               <h2 className="font-bold text-slate-800">Capture or Upload Image</h2>
             </div>
             <p className="text-slate-400 text-sm mb-4">JPEG, PNG, or WebP. Clear field-level shot preferred.</p>
@@ -116,8 +114,17 @@ const Upload: React.FC = () => {
                 <p className="text-sm mt-1">Supports JPG, PNG, WEBP</p>
               </div>
             ) : (
-              <div className="relative rounded-xl overflow-hidden">
+              <div className="relative rounded-xl overflow-hidden shadow-md">
                 <img src={previewUrl} alt="Preview" className="w-full h-auto object-cover rounded-xl" />
+                
+                {/* Clear Selection Button - Fixes TS Error 6133 */}
+                <button 
+                  onClick={clearSelection}
+                  className="absolute top-3 left-3 p-1.5 bg-white/90 hover:bg-white text-rose-500 rounded-full shadow-sm transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
                 <div className="absolute top-3 right-3 bg-slate-900/60 text-white text-xs px-2 py-1 rounded-lg">
                   {selectedFile && `${Math.round(selectedFile.size / 1024)}KB`}
                 </div>
@@ -140,16 +147,15 @@ const Upload: React.FC = () => {
           </div>
 
           {/* Section 2: Location */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              
               <h2 className="font-bold text-slate-800">Capture Location</h2>
             </div>
             <p className="text-slate-400 text-sm mb-4">GPS coordinates for crop location tracking</p>
 
             {locLoading ? (
               <div className="flex items-center gap-2 text-slate-400 py-4">
-                <Loader2 className="w-4 h-4 animate-spin" /> Fetching GPS signal...
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-500" /> Fetching GPS signal...
               </div>
             ) : location ? (
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mb-4">
@@ -165,11 +171,11 @@ const Upload: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1 mt-3">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-xs text-slate-500">Accuracy: ±{Math.round(location.accuracy)}m</span>
+                  <span className="text-xs text-slate-500 font-medium">Accuracy: ±{Math.round(location.accuracy)}m</span>
                 </div>
               </div>
             ) : (
-              <div className="bg-slate-50 rounded-xl p-4 mb-4 text-slate-400 text-sm">
+              <div className="bg-slate-50 rounded-xl p-4 mb-4 text-slate-400 text-sm font-medium">
                 Location unavailable. Please allow browser location access.
               </div>
             )}
@@ -183,9 +189,8 @@ const Upload: React.FC = () => {
           </div>
 
           {/* Section 3: Growth Stage */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              
               <h2 className="font-bold text-slate-800">Crop Growth Stage</h2>
             </div>
             <p className="text-slate-400 text-sm mb-4">Select the current growth stage of the crop</p>
@@ -194,7 +199,7 @@ const Upload: React.FC = () => {
             <select
               value={growthStage}
               onChange={(e) => setGrowthStage(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-white"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-white cursor-pointer"
             >
               <option>Seedling (0–14 days)</option>
               <option>Vegetative (15–45 days)</option>
@@ -204,22 +209,20 @@ const Upload: React.FC = () => {
             </select>
           </div>
 
-
-
-          {/* Error */}
+          {/* Error Display */}
           {error && (
-            <div className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-sm">
+            <div className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-sm font-medium animate-pulse">
               <X className="w-4 h-4" /> {error}
             </div>
           )}
 
-          {/* Result */}
+          {/* Result Card */}
           {result && (
             <AnimatePresence>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-slate-900 rounded-2xl p-6 text-white"
+                className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl"
               >
                 <h2 className="font-bold text-lg flex items-center gap-2 mb-4">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Analysis Report
@@ -235,13 +238,17 @@ const Upload: React.FC = () => {
                     <p className="text-slate-400 text-sm mb-2">AI Confidence Score</p>
                     <div className="flex items-center gap-4">
                       <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${result.confidence}%` }} />
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${result.confidence}%` }}
+                          className="h-full bg-emerald-500 rounded-full" 
+                        />
                       </div>
                       <span className="font-bold text-sm">{result.confidence}%</span>
                     </div>
                   </div>
                   <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                    <p className="text-slate-400 text-sm mb-1">Recommendation</p>
+                    <p className="text-slate-400 text-sm mb-1 font-semibold uppercase tracking-wider">Recommendation</p>
                     <p className="text-slate-200 text-sm">{result.recommendation}</p>
                   </div>
                 </div>
@@ -249,14 +256,14 @@ const Upload: React.FC = () => {
             </AnimatePresence>
           )}
 
-          {/* Submit */}
+          {/* Submit Action */}
           <button
             disabled={!selectedFile || isAnalyzing}
             onClick={handleAnalyze}
-            className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all ${
+            className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all shadow-md ${
               !selectedFile ? 'bg-slate-300 cursor-not-allowed' :
               isAnalyzing ? 'bg-emerald-400 cursor-wait' :
-              'bg-emerald-700 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-500/25'
+              'bg-emerald-700 hover:bg-emerald-600 active:scale-[0.98]'
             }`}
           >
             {isAnalyzing ? (
@@ -267,8 +274,8 @@ const Upload: React.FC = () => {
           </button>
 
           <button
-            onClick={() => navigate('/')}
-            className="w-full text-center text-sm text-emerald-600 hover:text-emerald-700 font-medium py-2"
+            onClick={() => navigate('/home')}
+            className="w-full text-center text-sm text-emerald-600 hover:text-emerald-700 font-bold py-2 transition-colors"
           >
             ← Back to Home
           </button>
@@ -276,7 +283,7 @@ const Upload: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-slate-400 mt-10">
+        <p className="text-center text-xs text-slate-400 mt-10 font-medium">
           CROPIC © 2026 | Digital Crop Monitoring Initiative | Ministry of Agriculture
         </p>
       </div>

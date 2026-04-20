@@ -1,0 +1,17 @@
+# Node
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# ML models
+*.pth
+
+# OS files
+.DS_Store
+Thumbs.db

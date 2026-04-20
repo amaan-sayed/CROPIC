@@ -1,27 +1,25 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Homepage from './pages/Home'; 
+import Login from './pages/Login';       
+import Dashboard from './pages/Dashboard'; 
+import Upload from './pages/Upload';
+import OfficerPortal from './OfficerPortal'; 
 
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
-import Dashboard from './pages/Dashboard';
-import UploadPage from './pages/Upload';
-
-const App: React.FC = () => {
+function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-[#F8FAFC]">
-        <Navbar />
-        <div className="pt-20">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/upload" element={<UploadPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </div>
+      <Routes>
+        {/* 1. FIRST PAGE: localhost:5173 loads the Login page */}
+        <Route path="/" element={<Login />} />
+        
+        {/* 2. THE WEBSITE: Pages they access AFTER logging in */}
+        <Route path="/home" element={<Homepage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/upload" element={<Upload />} />
+        <Route path="/officer" element={<OfficerPortal />} />
+      </Routes>
     </Router>
   );
-};
+}
 
 export default App;

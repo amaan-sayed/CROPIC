@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Popup, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { motion, AnimatePresence } from 'framer-motion'; // Added AnimatePresence
+import { useNavigate } from 'react-router-dom'; // Added useNavigate
 import {
   FileText,
   CheckCircle2,
   AlertTriangle,
   Clock,
   ChevronRight,
+  ChevronLeft, // Added for back button
   Loader2,
   AlertCircle,
   MapPin,
@@ -15,17 +18,21 @@ import {
   Activity,
   Calendar,
   Filter,
+  X, // Added for close button
+  ShieldCheck, // Added for remarks
 } from 'lucide-react';
 
 // --- TYPESCRIPT INTERFACES ---
 
 interface Submission {
   id: string;
-  time: string;           // ISO timestamp string from backend e.g. "2026-04-13T14:32:00Z"
-  location: string;       // May be empty — we'll reverse-geocode from coordinates
-  status: 'Healthy' | 'Moisture Stress' | 'Pest Alert' | 'High Damage';
+  time: string;
+  location: string;
+  // Add 'Approved' and 'Rejected' here inside the type definition
+  status: 'Healthy' | 'Moisture Stress' | 'Pest Alert' | 'High Damage' | 'Approved' | 'Rejected';
   coordinates: [number, number];
   cropStage?: string;
+  remarks?: string;
 }
 
 interface EnrichedSubmission extends Submission {
@@ -35,11 +42,10 @@ interface EnrichedSubmission extends Submission {
 
 // --- HELPERS ---
 
-/** Format ISO timestamp → "13 Apr 2026, 2:32 PM" */
 function formatTime(raw: string): string {
   if (!raw) return '—';
   const d = new Date(raw);
-  if (isNaN(d.getTime())) return raw; // Already formatted string from backend — use as-is
+  if (isNaN(d.getTime())) return raw;
   return d.toLocaleString('en-IN', {
     day: '2-digit',
     month: 'short',
@@ -50,7 +56,6 @@ function formatTime(raw: string): string {
   });
 }
 
-/** Reverse-geocode [lat, lng] → human-readable place name using Nominatim (free, no key) */
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
     const res = await fetch(
@@ -59,7 +64,6 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
     );
     const data = await res.json();
     const a = data.address || {};
-    // Build concise label: village/suburb + district/state
     const place =
       a.village || a.suburb || a.town || a.city_district || a.city || a.county || '';
     const district = a.state_district || a.county || a.state || '';
@@ -69,7 +73,6 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   }
 }
 
-// --- STATUS CONFIG ---
 const statusConfig = {
   Healthy: {
     color: '#10b981',
@@ -107,7 +110,33 @@ const statusConfig = {
     dot: '#dc2626',
     label: 'High Damage',
   },
+  // --- ADD THESE TWO LINES ---
+  'Approved': { color: '#059669', bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-900', badge: 'bg-emerald-200 text-emerald-900', dot: '#059669', label: 'Approved by Officer' },
+  'Rejected': { color: '#991b1b', bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-900', badge: 'bg-red-200 text-red-900', dot: '#991b1b', label: 'Rejected by Officer' },
 };
+
+const validStatuses = ['Healthy', 'Moisture Stress', 'Pest Alert', 'High Damage' ,'Approved','Rejected' ] as const;
+
+// 2. Update this function to catch officer decisions
+function normalizeStatus(raw: string): keyof typeof statusConfig {
+  if (validStatuses.includes(raw as any)) return raw as keyof typeof statusConfig;
+  
+  const lower = raw?.toLowerCase?.() ?? '';
+  
+  // Logic to catch officer responses from the database
+  if (lower.includes('approved')) return 'Approved';
+  if (lower.includes('rejected')) return 'Rejected';
+  
+  if (lower.includes('healthy')) return 'Healthy';
+  if (lower.includes('moisture') || lower.includes('stress')) return 'Moisture Stress';
+  if (lower.includes('pest')) return 'Pest Alert';
+  if (lower.includes('damage')) return 'High Damage';
+  return 'Healthy'; 
+}
+
+function getCfg(status: string) {
+  return statusConfig[status as keyof typeof statusConfig] ?? statusConfig['Healthy'];
+}
 
 const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -115,6 +144,8 @@ const Dashboard: React.FC = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([19.1825, 73.1841]);
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [submissions, setSubmissions] = useState<EnrichedSubmission[]>([]);
+  const navigate = useNavigate();
+  const [selectedReport, setSelectedReport] = useState<EnrichedSubmission | null>(null);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -129,21 +160,19 @@ const Dashboard: React.FC = () => {
 
         const rawSubs: Submission[] = backendData.submissions || [];
 
-        // Enrich with formatted time — geocoding happens separately below
         const enriched: EnrichedSubmission[] = rawSubs.map((s) => ({
           ...s,
+          status: normalizeStatus(s.status as unknown as string),
           formattedTime: formatTime(s.time),
           resolvedLocation: s.location || `${s.coordinates[0].toFixed(4)}, ${s.coordinates[1].toFixed(4)}`,
         }));
 
         setSubmissions(enriched);
 
-        // Now reverse-geocode all entries that lack a location label
-        // Rate-limit: Nominatim requires max 1 req/sec
         for (let i = 0; i < enriched.length; i++) {
           const sub = enriched[i];
           if (!sub.location || sub.location.trim() === '') {
-            if (i > 0) await new Promise((r) => setTimeout(r, 1100)); // 1.1s gap
+            if (i > 0) await new Promise((r) => setTimeout(r, 1100));
             const resolved = await reverseGeocode(sub.coordinates[0], sub.coordinates[1]);
             setSubmissions((prev) =>
               prev.map((s) => (s.id === sub.id ? { ...s, resolvedLocation: resolved } : s))
@@ -160,7 +189,6 @@ const Dashboard: React.FC = () => {
     fetchUserData();
   }, []);
 
-  // ── Computed stats from actual submission data (never trust backend % blindly) ──
   const totalAnalyzed = submissions.length;
   const healthyCount = submissions.filter((s) => s.status === 'Healthy').length;
   const alertCount = submissions.filter(
@@ -306,25 +334,26 @@ const Dashboard: React.FC = () => {
       <div className="cropic-dash flex-1 min-h-screen overflow-y-auto" style={{ background: '#F4F6F0' }}>
         <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
 
-          {/* ── PAGE HEADER ── */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Field Dashboard</h1>
-              <p className="text-slate-500 text-sm mt-0.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
-            {submissions.length > 0 && (
-              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
-                <Activity className="w-4 h-4 text-emerald-600" />
-                <span className="text-emerald-700 text-sm font-semibold">
-                  {submissions.length} submission{submissions.length !== 1 ? 's' : ''} tracked
-                </span>
-              </div>
-            )}
-          </div>
-
+{/* ── PAGE HEADER ── */}
+<div className="flex items-center justify-between mb-8">
+  <div className="flex items-center gap-4">
+    {/* PREMIUM BACK BUTTON */}
+    <button 
+      onClick={() => navigate('/home')}
+      className="p-2.5 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all text-slate-600 shadow-sm hover:shadow-md active:scale-95"
+    >
+      <ChevronLeft className="w-5 h-5" />
+    </button>
+    <div>
+      <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Field Dashboard</h1>
+      <p className="text-slate-500 text-sm mt-0.5 flex items-center gap-1.5 font-medium">
+        <Calendar className="w-3.5 h-3.5" />
+        {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      </p>
+    </div>
+  </div>
+  {/* Existing stats badge here... */}
+</div>
           {/* ── KPI CARDS ── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Analyzed */}
@@ -355,7 +384,6 @@ const Dashboard: React.FC = () => {
                   <TrendingUp className="w-5 h-5 text-emerald-500 mb-1.5" />
                 )}
               </div>
-              {/* Mini health bar */}
               <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
@@ -418,7 +446,7 @@ const Dashboard: React.FC = () => {
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     {submissions.map((sub) => {
-                      const cfg = statusConfig[sub.status];
+                      const cfg = getCfg(sub.status);
                       return (
                         <CircleMarker
                           key={sub.id}
@@ -459,6 +487,66 @@ const Dashboard: React.FC = () => {
                 )}
               </div>
             </div>
+            {/* ── OFFICER FEEDBACK MODAL ── */}
+      <AnimatePresence>
+        {selectedReport && (
+          <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md" onClick={() => setSelectedReport(null)}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-white"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-white">
+                <h3 className="font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-500" /> {/* Uses Activity icon */}
+                  Verification Details
+                </h3>
+                <button onClick={() => setSelectedReport(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-8">
+                <div className="flex items-center gap-4 mb-8">
+                  <div 
+                    className="w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-inner"
+                    style={{ background: getCfg(selectedReport.status).color + '15' }}
+                  >
+                    <FileText style={{ color: getCfg(selectedReport.status).color }} className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-0.5">Report ID: #{selectedReport.id}</p>
+                    <p className="text-lg font-extrabold leading-none" style={{ color: getCfg(selectedReport.status).color }}>
+                      {getCfg(selectedReport.status).label}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 mb-8 relative">
+                  <ShieldCheck className="absolute top-4 right-4 w-4 h-4 text-slate-200" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Officer Remarks</p>
+                  <p className="text-sm text-slate-600 leading-relaxed font-medium italic">
+                    {selectedReport.remarks ? `"${selectedReport.remarks}"` : "Official validation based on AI geospatial analysis. No extra remarks."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Crop State</p>
+                    <p className="text-sm font-bold text-slate-700">{selectedReport.cropStage || 'Vegetative'}</p>
+                  </div>
+                  <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Time Sync</p>
+                    <p className="text-sm font-bold text-slate-700">{selectedReport.formattedTime.split(',')[0]}</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
             {/* UPLOAD HISTORY — 2 cols */}
             <div className="lg:col-span-2 section-card flex flex-col">
@@ -506,12 +594,13 @@ const Dashboard: React.FC = () => {
                 ) : (
                   <div className="space-y-1">
                     {filteredSubmissions.map((submission) => {
-                      const cfg = statusConfig[submission.status];
+                      const cfg = getCfg(submission.status);
                       return (
-                        <div key={submission.id} className="upload-row group">
-                          {/* Status icon */}
+                        <div key={submission.id} className="upload-row group"
+                          onClick={() => setSelectedReport(submission)}
+                        >
                           <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-bold"
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold"
                             style={{
                               background: cfg.color + '15',
                               border: `1.5px solid ${cfg.color}40`,
@@ -525,7 +614,6 @@ const Dashboard: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="text-sm font-bold text-slate-800 mono">#{submission.id}</p>
@@ -542,19 +630,19 @@ const Dashboard: React.FC = () => {
                             </div>
                             <div className="flex flex-col gap-0.5 text-xs text-slate-400">
                               <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3 flex-shrink-0" />
+                                <Clock className="w-3 h-3 shrink-0" />
                                 {submission.formattedTime}
                               </span>
                               {submission.resolvedLocation && (
                                 <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                                  <MapPin className="w-3 h-3 shrink-0" />
                                   <span className="truncate">{submission.resolvedLocation}</span>
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          <ChevronRight className="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         </div>
                       );
                     })}
